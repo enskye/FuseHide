@@ -178,6 +178,16 @@ For hidden targets the implementation can zero entry/attribute timeouts, avoid c
 
 `/storage/emulated/0/Android/data` and `/storage/emulated/0/Android/obb` are special MediaProvider paths. Their access control is not simply the same directory-enumeration path used for ordinary public `/sdcard` folders.
 
+In this fork, the shared native runtime treats a known foreign package directory
+under either path (including descendants) as missing for ordinary app UIDs.
+Both loaders refresh the ownership snapshot from the provider user's
+PackageManager at startup and on package installation or removal. Unknown
+packages, the owning appId (including shared UIDs), MediaProvider itself and
+system UIDs retain the platform decision. This policy runs independently of
+configured public storage rules. It applies when a request reaches a supported
+MediaProvider hook with a known path. Kernel-served requests on the Pixel have
+not yet been measured.
+
 FuseHide retains hooks and diagnostics around components such as:
 
 - `is_bpf_backing_path`

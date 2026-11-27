@@ -25,6 +25,7 @@ add_library(
     fusehide/hooks/hook_session.cpp
     fusehide/hooks/hook_install.cpp
     fusehide/jni/jni_entry.cpp
+    fusehide/policy/data_path.cpp
     fusehide/policy/path_policy.cpp
     fusehide/policy/unicode_policy.cpp
     third_party/xz-embedded/xz_dec_stream.c

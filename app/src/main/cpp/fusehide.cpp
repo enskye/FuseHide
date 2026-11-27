@@ -21,6 +21,7 @@ namespace fusehide {
 HookInstaller gHookInstaller = nullptr;
 StrictHookInstaller gStrictHookInstaller = nullptr;
 JavaVM* gJavaVm = nullptr;
+HookOriginal<DataOrObbAccessFn> gOriginalDataOrObbAccess;
 HookOriginal<IsAppAccessiblePathFn> gOriginalIsAppAccessiblePath;
 HookOriginal<IsPackageOwnedPathFn> gOriginalIsPackageOwnedPath;
 HookOriginal<IsBpfBackingPathFn> gOriginalIsBpfBackingPath;

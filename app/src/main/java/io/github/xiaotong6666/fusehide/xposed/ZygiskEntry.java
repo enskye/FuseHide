@@ -340,6 +340,7 @@ public final class ZygiskEntry {
                     final String pkg =
                             intent.getData() != null ? intent.getData().getSchemeSpecificPart() : null;
                     final String reason = pkg == null ? action : action + ":" + pkg;
+                    HideConfigNativeBridge.refreshPackageOwners(context);
                     HideConfigNativeBridge.notifyPackageSetChanged(reason);
                     Log.d("FuseHide", "package set changed reason=" + reason);
                 }
@@ -356,6 +357,7 @@ public final class ZygiskEntry {
             }
 
             DebugLogSettings.registerInjectedProcess(app);
+            HideConfigNativeBridge.refreshPackageOwners(app);
             startConfigReload("initial");
             Log.d("FuseHide", "registered");
         } catch (Throwable th) {

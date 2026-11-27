@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "fusehide/policy/data_path.hpp"
+
 #include "fusehide/hooks/wrappers.hpp"
 #include "fusehide/native_callback_gate.hpp"
 
@@ -388,6 +390,26 @@ Java_io_github_xiaotong6666_fusehide_config_HideConfigNativeBridge_setDebugLoggi
     fusehide::gDetailedDebugLogging.store(on, std::memory_order_relaxed);
     __android_log_print(ANDROID_LOG_INFO, fusehide::kLogTag, "native detailed debugging %s",
                         on ? "enabled" : "disabled");
+}
+
+JNIEXPORT void JNICALL
+Java_io_github_xiaotong6666_fusehide_config_HideConfigNativeBridge_replacePackageOwners(
+    JNIEnv* env, jclass, jobjectArray packages, jintArray uids) {
+    fusehide::data_path::Owners owners;
+    const auto names = JStringArrayToVector(env, packages);
+    if (!env->ExceptionCheck() && uids &&
+        names.size() == static_cast<size_t>(env->GetArrayLength(uids))) {
+        std::vector<jint> ids(names.size());
+        if (!ids.empty())
+            env->GetIntArrayRegion(uids, 0, ids.size(), ids.data());
+        if (!env->ExceptionCheck()) {
+            for (size_t i = 0; i < names.size(); ++i) {
+                if (ids[i] >= 0)
+                    owners.emplace(names[i], ids[i]);
+            }
+        }
+    }
+    fusehide::data_path::ReplaceOwners(std::move(owners));
 }
 
 // Package add/remove is observed from the injected MediaProvider process and forwarded here so the

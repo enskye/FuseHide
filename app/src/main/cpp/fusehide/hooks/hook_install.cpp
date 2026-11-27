@@ -18,6 +18,7 @@
 
 namespace fusehide {
 
+static_assert(std::is_same_v<decltype(&WrappedDataOrObbAccess), DataOrObbAccessFn>);
 static_assert(std::is_same_v<decltype(&WrappedShouldNotCache), ShouldNotCacheFn>);
 static_assert(std::is_same_v<decltype(&WrappedGetDirectoryEntriesShared), GetDirectoryEntriesFn>);
 static_assert(

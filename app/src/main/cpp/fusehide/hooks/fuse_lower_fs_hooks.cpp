@@ -16,6 +16,7 @@
 #include "fusehide/hooks/wrappers.hpp"
 
 #include "fusehide/core/root_snapshot_cache.hpp"
+#include "fusehide/policy/data_path.hpp"
 #include "fusehide/policy/path_policy.hpp"
 
 namespace fusehide {
@@ -42,6 +43,15 @@ bool ShouldHideLowerFsPath(std::string_view pathView) {
 // https://android.googlesource.com/platform/packages/providers/MediaProvider/+/refs/heads/android14-release/jni/FuseDaemon.cpp#1985
 extern "C" int WrappedLstat(const char* path, struct stat* st) {
     const std::string_view pathView = path != nullptr ? std::string_view(path) : std::string_view();
+    if (gInPfGetattr) {
+        const auto owner = data_path::PackageUid(pathView, gPfGetattrUid, "lstat");
+        if (data_path::HideFrom(gPfGetattrUid, owner)) {
+            errno = ENOENT;
+            return -1;
+        }
+        if (owner)
+            gZeroAttrCacheForCurrentGetattr = true;
+    }
     if (gInPfGetattr && gPfGetattrIno != 0 &&
         HiddenPathPolicy::IsHiddenRootDirectoryPath(pathView)) {
         // Recover the volume identity for Sessions first observed after creation.

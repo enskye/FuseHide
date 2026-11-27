@@ -16,6 +16,11 @@
 
 package io.github.xiaotong6666.fusehide.config;
 
+import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.util.Log;
+import java.util.List;
+
 public final class HideConfigNativeBridge {
     static {
         try {
@@ -71,6 +76,25 @@ public final class HideConfigNativeBridge {
 
     // Enables existing native DebugLogPrint diagnostics in both Debug and Release builds.
     public static native void setDebugLoggingEnabled(boolean enabled);
+
+    private static native void replacePackageOwners(String[] packages, int[] uids);
+
+    public static synchronized void refreshPackageOwners(Context context) {
+        try {
+            List<ApplicationInfo> installed = context.getPackageManager().getInstalledApplications(0);
+            String[] packages = new String[installed.size()];
+            int[] uids = new int[installed.size()];
+            for (int i = 0; i < installed.size(); i++) {
+                ApplicationInfo app = installed.get(i);
+                packages[i] = app.packageName;
+                uids[i] = app.uid;
+            }
+            replacePackageOwners(packages, uids);
+        } catch (RuntimeException e) {
+            replacePackageOwners(null, null);
+            Log.w("FuseHide", "Could not refresh package owners", e);
+        }
+    }
 
     // Package add/remove can change the effective hide rule for an already-seen uid even when the
     // serialized config is unchanged.

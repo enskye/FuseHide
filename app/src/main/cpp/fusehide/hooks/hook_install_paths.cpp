@@ -4,6 +4,13 @@
 
 namespace fusehide {
 
+namespace {
+constexpr std::string_view kDataOrObbAccessSymbols[] = {
+    "_ZN13mediaprovider4fuse20MediaProviderWrapper33isUidAllowedAccessToDataOrObbPathEjRKNSt3__"
+    "112basic_stringIcNS2_11char_traitsIcEENS2_9allocatorIcEEEE",
+};
+}  // namespace
+
 // File-backed hooks are preferred first because they let us resolve internal symbols by name even
 // when the runtime ELF image is embedded inside an APK path.
 void InstallMinimalCoreHooks(const ModuleInfo& module, const FileElfContext& fileContext,
@@ -13,6 +20,9 @@ void InstallMinimalCoreHooks(const ModuleInfo& module, const FileElfContext& fil
     const DeviceHookProfile& deviceProfile = installPlan.profile;
     const bool hasClassicStringAbi = CanUseClassicStringWrappers(installPlan);
     if (hasClassicStringAbi) {
+        InstallFirstAvailableFileInlineHook(
+            module, kDataOrObbAccessSymbols, reinterpret_cast<void*>(+WrappedDataOrObbAccess),
+            &gOriginalDataOrObbAccess.rawStorage(), "hook data/obb provider gate failed");
         InstallFirstAvailableFileInlineHook(
             module, kIsAppAccessiblePathSymbols,
             reinterpret_cast<void*>(+WrappedIsAppAccessiblePath),
@@ -296,6 +306,11 @@ void InstallAdvancedCoreHooks(const ModuleInfo& module, CoreHookStatus* status) 
     const DeviceHookInstallPlan installPlan = ResolveDeviceHookInstallPlan(module);
     const DeviceHookProfile& deviceProfile = installPlan.profile;
     const bool hasClassicStringAbi = CanUseClassicStringWrappers(installPlan);
+    if (hasClassicStringAbi && gOriginalDataOrObbAccess.get() == nullptr) {
+        InstallFirstAvailableInlineHook(
+            kDataOrObbAccessSymbols, reinterpret_cast<void*>(+WrappedDataOrObbAccess),
+            &gOriginalDataOrObbAccess.rawStorage(), "hook data/obb provider gate failed");
+    }
     if (hasClassicStringAbi && !status->appAccessible) {
         InstallFirstAvailableInlineHook(
             kIsAppAccessiblePathSymbols, reinterpret_cast<void*>(+WrappedIsAppAccessiblePath),

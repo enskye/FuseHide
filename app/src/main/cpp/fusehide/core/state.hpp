@@ -160,6 +160,8 @@ inline bool DebugLoggingEnabled() noexcept {
 // classic three-word libc++ layout decoded below for that exact binary.
 using AbiStringParam = const void*;
 
+using DataOrObbAccessFn = bool (*)(void* provider, uint32_t uid, AbiStringParam path);
+
 using IsAppAccessiblePathFn = bool (*)(void* fuse, AbiStringParam path, uint32_t uid);
 using IsPackageOwnedPathFn = bool (*)(AbiStringParam lhs, AbiStringParam rhs);
 using IsBpfBackingPathFn = bool (*)(AbiStringParam path);
@@ -559,6 +561,7 @@ inline constexpr size_t kFuseEntryOutWireSize = 128;
 extern HookInstaller gHookInstaller;
 extern StrictHookInstaller gStrictHookInstaller;
 extern JavaVM* gJavaVm;
+extern HookOriginal<DataOrObbAccessFn> gOriginalDataOrObbAccess;
 extern HookOriginal<IsAppAccessiblePathFn> gOriginalIsAppAccessiblePath;
 extern HookOriginal<IsPackageOwnedPathFn> gOriginalIsPackageOwnedPath;
 extern HookOriginal<IsBpfBackingPathFn> gOriginalIsBpfBackingPath;

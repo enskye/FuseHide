@@ -15,6 +15,7 @@
 #include "fusehide/hooks/wrapper_context.hpp"
 #include "fusehide/hooks/wrappers.hpp"
 
+#include "fusehide/policy/data_path.hpp"
 #include "fusehide/policy/path_policy.hpp"
 
 namespace fusehide {
@@ -29,6 +30,21 @@ bool HiddenPathPolicy::ShouldHideTestPath(uint32_t uid, std::string_view path) {
     return IsHiddenPathClassification(ClassifyHiddenPath(uid, path));
 }
 
+// The FUSE-BPF lookup postfilter calls this provider gate directly, bypassing
+// is_app_accessible_path. Keep the ownership decision shared by both paths.
+bool WrappedDataOrObbAccess(void* provider, uint32_t uid, AbiStringParam pathArg) {
+    const auto original = gOriginalDataOrObbAccess.get();
+    const auto owner = data_path::PackageUid(AbiStringView(pathArg), uid, "data_obb_gate");
+    if (owner && gInPfLookupPostfilter)
+        gCrossUidSensitiveLookup = true;
+    if (data_path::HideFrom(uid, owner)) {
+        DebugLogPrint(4, "data_obb_gate hide uid=%u owner=%u path=%s", uid, *owner,
+                      DebugPreview(AbiStringView(pathArg)).c_str());
+        return false;
+    }
+    return original ? original(provider, uid, pathArg) : false;
+}
+
 // Mirror the original app-accessible gate: sanitize only when needed, then delegate.
 bool WrappedIsAppAccessiblePath(void* fuse, AbiStringParam pathArg, uint32_t uid) {
     const auto original = gOriginalIsAppAccessiblePath.get();
@@ -36,6 +52,18 @@ bool WrappedIsAppAccessiblePath(void* fuse, AbiStringParam pathArg, uint32_t uid
         return false;
     }
     const std::string_view path = AbiStringView(pathArg);
+    auto owner = data_path::PackageUid(path, uid, "gate");
+    // MediaProvider checks the parent during lookup. The enclosing request supplies
+    // the final component; getattr and access pass the object path directly.
+    if (gInPfLookup && uid == gCurrentLookupUid && !gCurrentLookupName.empty() &&
+        (path.ends_with("/Android/data") || path.ends_with("/Android/obb"))) {
+        owner = data_path::PackageUid(HiddenPathPolicy::JoinPathComponent(path, gCurrentLookupName),
+                                      uid, "lookup_gate");
+    }
+    if (owner && gInPfLookup && uid == gCurrentLookupUid)
+        gCrossUidSensitiveLookup = true;
+    if (data_path::HideFrom(uid, owner))
+        return false;
     const bool hasHideRule = BorrowHideRuleForUid(uid) != nullptr;
     if (!UnicodePolicy::NeedsSanitization(path)) {
         UnicodePolicy::LogSuspiciousDirectPath("app_accessible", path);

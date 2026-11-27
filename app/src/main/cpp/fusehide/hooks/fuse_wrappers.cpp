@@ -15,6 +15,7 @@
 #include "fusehide/hooks/wrapper_context.hpp"
 #include "fusehide/hooks/wrappers.hpp"
 
+#include "fusehide/policy/data_path.hpp"
 #include "fusehide/policy/path_policy.hpp"
 
 namespace fusehide {
@@ -99,6 +100,14 @@ extern "C" void WrappedPfLookup(fuse_req_t req, uint64_t parent, const char* nam
     DebugRootCallbackProbe(0, "lookup", parent, nullptr);
     const uint32_t uid = RuntimeState::ReqUid(req);
     std::string parentPath;
+    std::optional<uint32_t> owner;
+    if (const auto verified = LookupVerifiedTrackedPathForInode(parent); verified && name) {
+        owner = data_path::PackageUid(HiddenPathPolicy::JoinPathComponent(*verified, name), uid,
+                                      "lookup");
+        if (data_path::HideFrom(uid, owner) &&
+            ReplyErrorBridge::Reply(req, ENOENT, "data_path_lookup").has_value())
+            return;
+    }
     if (name != nullptr && parent != 0 && ResolveVisibleParentPath(parent, &parentPath) &&
         IsVisibleRootPath(parentPath) && HiddenPathPolicy::IsHiddenRootEntryName(uid, name)) {
         RememberVisibleRootParentInode(parent, "lookup_parent_path");
@@ -125,7 +134,7 @@ extern "C" void WrappedPfLookup(fuse_req_t req, uint64_t parent, const char* nam
             }
         }
     }
-    gCrossUidSensitiveLookup = IsCrossUidSensitiveLookup(parent, name);
+    gCrossUidSensitiveLookup = owner.has_value() || IsCrossUidSensitiveLookup(parent, name);
     DebugLogPrint(3, "lookup: req=%lu parent=%s name=%s", (unsigned long)req->unique,
                   InodePath(parent).c_str(), name ? DebugPreview(name).c_str() : "null");
 
@@ -262,14 +271,25 @@ extern "C" void WrappedPfLookupPostfilter(fuse_req_t req, uint64_t parent, uint3
     }
     const auto fn = gOriginalPfLookupPostfilter.get();
     if (fn) {
+        const bool previousPostfilter = gInPfLookupPostfilter;
+        const bool previousSensitive = gCrossUidSensitiveLookup;
         gInPfLookupPostfilter = true;
+        gCrossUidSensitiveLookup = false;
         fn(req, parent, error_in, name, feo, febo);
-        gInPfLookupPostfilter = false;
+        gCrossUidSensitiveLookup = previousSensitive;
+        gInPfLookupPostfilter = previousPostfilter;
     }
 }
 
 extern "C" void WrappedPfAccess(fuse_req_t req, uint64_t ino, int mask) {
     const ScopedFuseRequestSession scopedSession(req);
+    const auto tracked = LookupVerifiedTrackedPathForInode(ino);
+    const auto owner = tracked
+                           ? data_path::PackageUid(*tracked, RuntimeState::ReqUid(req), "access")
+                           : std::nullopt;
+    if (data_path::HideFrom(RuntimeState::ReqUid(req), owner) &&
+        ReplyErrorBridge::Reply(req, ENOENT, "data_path_access").has_value())
+        return;
     const auto fn = gOriginalPfAccess.get();
     if (fn) {
         fn(req, ino, mask);
@@ -406,7 +426,12 @@ extern "C" void WrappedPfReaddirplus(fuse_req_t req, uint64_t ino, size_t size, 
 extern "C" void WrappedPfGetattr(fuse_req_t req, uint64_t ino, void* fi) {
     const ScopedFuseRequestSession scopedSession(req);
     const uint32_t uid = RuntimeState::ReqUid(req);
-    gZeroAttrCacheForCurrentGetattr = IsTrackedHiddenSubtreeInode(uid, ino);
+    const auto tracked = LookupVerifiedTrackedPathForInode(ino);
+    const auto owner = tracked ? data_path::PackageUid(*tracked, uid, "getattr") : std::nullopt;
+    if (data_path::HideFrom(uid, owner) &&
+        ReplyErrorBridge::Reply(req, ENOENT, "data_path_getattr").has_value())
+        return;
+    gZeroAttrCacheForCurrentGetattr = owner.has_value() || IsTrackedHiddenSubtreeInode(uid, ino);
     if (HiddenPathPolicy::IsTestHiddenUid(uid)) {
         DebugLogPrint(4, "pf_getattr test uid=%u ino=0x%lx", static_cast<unsigned>(uid),
                       (unsigned long)ino);

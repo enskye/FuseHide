@@ -526,6 +526,19 @@ extern "C" int WrappedReplyBuf(fuse_req_t req, const char* buf, size_t size) {
     if (gReaddirplusContinuation != nullptr && gReaddirplusContinuation->req == req)
         gReaddirplusContinuation->replySent = true;
 #endif
+    // The BPF postfilter returns a wire entry through reply_buf, bypassing
+    // fuse_reply_entry and its cache lifetime handling. Preserve trailing BPF data.
+    if (gInPfLookupPostfilter && gCrossUidSensitiveLookup && replyBuf != nullptr &&
+        replySize >= kFuseEntryOutWireSize) {
+        // Same FUSE UAPI validity fields as sensitive_direntplus_cache.hpp.
+        constexpr size_t validityOffset = 16;
+        constexpr size_t validitySize = 24;
+        static_assert(validityOffset + validitySize <= kFuseEntryOutWireSize);
+        std::vector<char> uncached(replyBuf, replyBuf + replySize);
+        std::memset(uncached.data() + validityOffset, 0, validitySize);
+        filteredStorage.swap(uncached);
+        replyBuf = filteredStorage.data();
+    }
     int ret = fn ? fn(req, replyBuf, replySize) : -1;
     if (DebugLoggingEnabled()) {
         if (filterPlainReaddir || filterReaddirplus || filterPostfilterReaddir ||

@@ -18,6 +18,8 @@
 
 namespace fusehide {
 
+bool WrappedDataOrObbAccess(void* provider, uint32_t uid, AbiStringParam path);
+
 extern "C" bool WrappedShouldNotCache(void* fuse, AbiStringParam path);
 DirectoryEntries WrappedGetDirectoryEntriesShared(void* wrapper, uint32_t uid, AbiStringParam path,
                                                   DIR* dirp);
